@@ -1,296 +1,235 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Translator App Builder</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Translator</title>
   <style>
-    body { font-family: system-ui; margin: 16px; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    input, select, button, textarea { padding:10px; font-size:16px; }
-    textarea { width:100%; height: 260px; }
-    .card { border:1px solid #ddd; padding:12px; border-radius:12px; margin-top:12px; }
-    code { background:#f5f5f5; padding:2px 6px; border-radius:6px; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    select, button, input { padding: 10px; font-size: 16px; }
+    button { cursor: pointer; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: #eee; }
+    #liveBox, #log { width: 100%; min-height: 90px; padding: 12px; border: 1px solid #ddd; border-radius: 10px; }
+    #log { min-height: 180px; }
+    .item { border-top: 1px solid #eee; padding: 10px 0; }
+    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
   </style>
 </head>
 <body>
-  <h2>Translator App Builder</h2>
-  <p>Fill settings → click <b>Generate</b> → copy output into <code>index.html</code>.</p>
 
-  <div class="card">
-    <div class="row">
-      <label>Worker URL:
-        <input id="workerUrl" style="width:360px" placeholder="https://xxx.workers.dev/translate">
-      </label>
-      <label>Default input:
-        <select id="defIn">
-          <option value="en-US" selected>en-US</option>
-          <option value="es-ES">es-ES</option>
-          <option value="fr-FR">fr-FR</option>
-          <option value="de-DE">de-DE</option>
-          <option value="pt-BR">pt-BR</option>
-          <option value="ja-JP">ja-JP</option>
-          <option value="ko-KR">ko-KR</option>
-          <option value="zh-CN">zh-CN</option>
-        </select>
-      </label>
-      <label>Default output:
-        <select id="defOut">
-          <option value="es" selected>es</option>
-          <option value="en">en</option>
-          <option value="fr">fr</option>
-          <option value="de">de</option>
-          <option value="pt">pt</option>
-          <option value="ja">ja</option>
-          <option value="ko">ko</option>
-          <option value="zh">zh</option>
-          <option value="ru">ru</option>
-        </select>
-      </label>
-    </div>
+<h2>Live Translator</h2>
 
-    <div class="row" style="margin-top:10px;">
-      <label>Silence flush (ms):
-        <input id="silenceMs" type="number" value="900" min="200" step="100">
-      </label>
-      <label>Max chars:
-        <input id="maxChars" type="number" value="220" min="60" step="20">
-      </label>
-      <label>Max chunk age (ms):
-        <input id="maxAgeMs" type="number" value="8000" min="2000" step="1000">
-      </label>
-      <label>Auto-speak:
-        <select id="autoSpeak">
-          <option value="on" selected>on</option>
-          <option value="off">off</option>
-        </select>
-      </label>
-      <button id="gen">Generate</button>
-      <button id="copy">Copy</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Generated <code>index.html</code></h3>
-    <textarea id="out" spellcheck="false"></textarea>
-  </div>
-
-<script>
-const template = (cfg) => `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Live Translator</title>
-</head>
-<body>
-  <h2>Live Translator</h2>
-  <p>Worker: <code>${cfg.workerUrl}</code></p>
-
+<div class="row">
   <label>Input:
     <select id="inputLang">
-      ${["en-US","es-ES","fr-FR","de-DE","pt-BR","ja-JP","ko-KR","zh-CN"].map(v =>
-        `<option value="${v}" ${v===cfg.defIn?"selected":""}>${v}</option>`).join("")}
+      <option value="en-US" selected>English</option>
+      <option value="es-ES">Spanish</option>
+      <option value="fr-FR">French</option>
+      <option value="de-DE">German</option>
+      <option value="pt-BR">Portuguese</option>
+      <option value="ja-JP">Japanese</option>
+      <option value="ko-KR">Korean</option>
+      <option value="zh-CN">Chinese</option>
     </select>
   </label>
 
   <label>Output:
     <select id="outputLang">
-      ${["es","en","fr","de","pt","ja","ko","zh","ru"].map(v =>
-        `<option value="${v}" ${v===cfg.defOut?"selected":""}>${v}</option>`).join("")}
+      <option value="es" selected>Spanish</option>
+      <option value="en">English</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+      <option value="pt">Portuguese</option>
+      <option value="ja">Japanese</option>
+      <option value="ko">Korean</option>
+      <option value="zh">Chinese</option>
     </select>
   </label>
 
   <button id="toggleBtn">▶ Start</button>
-  <span id="status">Idle</span>
+  <span id="status" class="pill">Idle</span>
+</div>
 
-  <div style="margin-top:10px;">
-    <label>Silence ms <input id="silenceMs" type="number" value="${cfg.silenceMs}"></label>
-    <label>Max chars <input id="maxChars" type="number" value="${cfg.maxChars}"></label>
-    <label>Max age ms <input id="maxAgeMs" type="number" value="${cfg.maxAgeMs}"></label>
-    <label>Auto-speak
-      <select id="autoSpeak">
-        <option value="on" ${cfg.autoSpeak==="on"?"selected":""}>On</option>
-        <option value="off" ${cfg.autoSpeak==="off"?"selected":""}>Off</option>
-      </select>
-    </label>
-  </div>
+<div class="row" style="margin-top:10px;">
+  <label>Worker URL:
+    <input id="translateUrl" style="width:380px"
+      value="https://YOUR-WORKER-NAME.workers.dev/translate">
+  </label>
+</div>
 
-  <h3>Live</h3>
-  <pre id="liveBox"></pre>
-  <h3>Log</h3>
-  <div id="log"></div>
+<div class="row" style="margin-top:10px;">
+  <label>Silence (ms)
+    <input id="silenceMs" type="number" value="900">
+  </label>
+  <label>Max chars
+    <input id="maxChars" type="number" value="220">
+  </label>
+  <label>Max age (ms)
+    <input id="maxAgeMs" type="number" value="8000">
+  </label>
+</div>
+
+<h3>Live</h3>
+<div id="liveBox" class="mono"></div>
+
+<h3>Translations</h3>
+<div id="log"></div>
 
 <script>
 (() => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) { alert("Use Chrome/Edge"); return; }
+  if (!SpeechRecognition) {
+    alert("Use Chrome or Edge on Android.");
+    return;
+  }
 
   const recognition = new SpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
 
-  const inputLangEl = document.getElementById("inputLang");
-  const outputLangEl = document.getElementById("outputLang");
+  const inputLang = document.getElementById("inputLang");
+  const outputLang = document.getElementById("outputLang");
   const toggleBtn = document.getElementById("toggleBtn");
   const statusEl = document.getElementById("status");
   const liveBox = document.getElementById("liveBox");
-  const logEl = document.getElementById("log");
+  const log = document.getElementById("log");
+
   const silenceMsEl = document.getElementById("silenceMs");
   const maxCharsEl = document.getElementById("maxChars");
   const maxAgeMsEl = document.getElementById("maxAgeMs");
-  const autoSpeakEl = document.getElementById("autoSpeak");
+  const translateUrlEl = document.getElementById("translateUrl");
 
-  const WORKER_URL = ${JSON.stringify(cfg.workerUrl)};
+  let running = false;
+  let chunkFinal = [];
+  let chunkInterim = "";
+  let chunkStart = 0;
+  let silenceTimer = null;
+  let ageTimer = null;
+  let translating = false;
+  let history = [];
 
-  let running=false, items=[];
-  let chunkFinalParts=[], chunkInterim="", chunkStartedAt=0;
-  let silenceTimer=null, ageTimer=null, translating=false;
+  function setStatus(t){ statusEl.textContent = t; }
 
-  function setStatus(t){ statusEl.textContent=t; }
   function updateLive(){
-    const finalText = chunkFinalParts.join(" ").trim();
-    const combined = (finalText + (chunkInterim ? " " + chunkInterim : "")).trim();
-    liveBox.textContent = combined;
+    liveBox.textContent = (chunkFinal.join(" ") + " " + chunkInterim).trim();
   }
-  function clearTimers(){
-    if(silenceTimer){clearTimeout(silenceTimer); silenceTimer=null;}
-    if(ageTimer){clearTimeout(ageTimer); ageTimer=null;}
-  }
-  function armSilence(){
-    if(!running) return;
-    if(silenceTimer) clearTimeout(silenceTimer);
-    const ms = Math.max(200, Number(silenceMsEl.value)||900);
-    silenceTimer=setTimeout(()=>flush("silence"), ms);
-  }
-  function armAge(){
-    if(!running) return;
-    if(ageTimer) clearTimeout(ageTimer);
-    const ms = Math.max(2000, Number(maxAgeMsEl.value)||8000);
-    ageTimer=setTimeout(()=>flush("maxAge"), ms);
-  }
-  function speak(text, lang){
-    if(!("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang;
-    speechSynthesis.speak(u);
-  }
-  function langToCode(tag){ return (tag||"en-US").split("-")[0].toLowerCase(); }
 
-  async function translate(text, fromTag, toCode){
-    const payload = { q:text, source: langToCode(fromTag), target: toCode, format:"text" };
-    const r = await fetch(WORKER_URL, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
+  function clearTimers(){
+    if (silenceTimer) clearTimeout(silenceTimer);
+    if (ageTimer) clearTimeout(ageTimer);
+    silenceTimer = ageTimer = null;
+  }
+
+  function armSilence(){
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => flush("silence"), Number(silenceMsEl.value));
+  }
+
+  function armAge(){
+    clearTimeout(ageTimer);
+    ageTimer = setTimeout(() => flush("maxAge"), Number(maxAgeMsEl.value));
+  }
+
+  async function translate(text){
+    const payload = {
+      q: text,
+      source: inputLang.value.split("-")[0],
+      target: outputLang.value,
+      format: "text"
+    };
+
+    const r = await fetch(translateUrlEl.value, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    if(!r.ok) throw new Error(await r.text());
-    const data = await r.json();
-    return data.translatedText || "";
+
+    if (!r.ok) throw new Error(await r.text());
+    const j = await r.json();
+    return j.translatedText;
+  }
+
+  function speak(text){
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = outputLang.value;
+    speechSynthesis.speak(u);
   }
 
   function render(){
-    logEl.innerHTML = items.slice().reverse().map(it => \`
-      <div style="border-top:1px solid #ddd; padding:8px 0;">
-        <div><b>Heard:</b> \${it.source}</div>
-        <div><b>Translation:</b> \${it.out}</div>
-        <button onclick="speechSynthesis.cancel(); (new SpeechSynthesisUtterance(\${JSON.stringify("${" + "it.out" + "}")}))">Play</button>
-      </div>\`
-    ).join("");
-    // (simple render; your main app version has nicer replay buttons)
+    log.innerHTML = history.slice().reverse().map(h => `
+      <div class="item">
+        <div><b>Heard:</b> ${h.in}</div>
+        <div><b>Translation:</b> ${h.out}</div>
+        <button onclick="speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance('${h.out.replace(/'/g,"")}'))">🔊 Play</button>
+      </div>
+    `).join("");
   }
 
   async function flush(reason){
-    const text = (chunkFinalParts.join(" ") + (chunkInterim?(" "+chunkInterim):"")).trim();
-    if(!text) return;
+    const text = (chunkFinal.join(" ") + " " + chunkInterim).trim();
+    if (!text || translating) return;
 
-    chunkFinalParts=[]; chunkInterim=""; chunkStartedAt=0;
-    updateLive(); clearTimers();
+    chunkFinal = [];
+    chunkInterim = "";
+    chunkStart = 0;
+    updateLive();
+    clearTimers();
 
-    if(translating){ setTimeout(()=>flush(reason),150); return; }
-    translating=true;
+    translating = true;
     setStatus("Translating…");
 
-    try{
-      const out = await translate(text, inputLangEl.value, outputLangEl.value);
-      items.push({ source:text, out });
+    try {
+      const out = await translate(text);
+      history.push({ in: text, out });
       render();
-      if(autoSpeakEl.value==="on" && out.trim()) speak(out, outputLangEl.value);
+      speak(out);
       setStatus("Listening…");
-    }catch(e){
-      console.error(e);
+    } catch {
       setStatus("Translate error");
-    }finally{
-      translating=false;
-      if(running) armSilence();
+    } finally {
+      translating = false;
     }
   }
 
-  recognition.onresult = (ev) => {
-    const now = Date.now();
-    if(!chunkStartedAt){ chunkStartedAt=now; armAge(); }
-    let interim="";
-    for(let i=ev.resultIndex;i<ev.results.length;i++){
-      const res=ev.results[i];
-      const txt=(res[0]?.transcript||"").trim();
-      if(!txt) continue;
-      if(res.isFinal) chunkFinalParts.push(txt);
-      else interim += (interim?" ":"") + txt;
+  recognition.onresult = e => {
+    if (!chunkStart) { chunkStart = Date.now(); armAge(); }
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      const t = r[0].transcript.trim();
+      if (r.isFinal) chunkFinal.push(t);
+      else interim += " " + t;
     }
     chunkInterim = interim.trim();
     updateLive();
     armSilence();
 
-    const maxChars = Math.max(60, Number(maxCharsEl.value)||220);
-    const combined = (chunkFinalParts.join(" ") + " " + chunkInterim).trim();
-    if(combined.length >= maxChars) flush("maxChars");
+    const combined = (chunkFinal.join(" ") + chunkInterim).length;
+    if (combined > Number(maxCharsEl.value)) flush("maxChars");
   };
 
-  recognition.onend = () => { if(running) { try{recognition.start();}catch{} } };
+  recognition.onend = () => { if (running) recognition.start(); };
 
   function start(){
-    running=true; toggleBtn.textContent="⏸ Pause";
-    recognition.lang = inputLangEl.value;
+    running = true;
+    recognition.lang = inputLang.value;
+    toggleBtn.textContent = "⏸ Pause";
     setStatus("Listening…");
-    chunkFinalParts=[]; chunkInterim=""; chunkStartedAt=0;
-    updateLive(); clearTimers();
-    try{recognition.start();}catch{}
-    armSilence();
+    recognition.start();
   }
+
   function stop(){
-    running=false; toggleBtn.textContent="▶ Start";
+    running = false;
+    toggleBtn.textContent = "▶ Start";
     setStatus("Idle");
     clearTimers();
-    try{recognition.stop();}catch{}
+    recognition.stop();
   }
-  toggleBtn.onclick = ()=> running?stop():start();
+
+  toggleBtn.onclick = () => running ? stop() : start();
 })();
-<\/script>
-</body></html>`;
-
-document.getElementById("gen").onclick = () => {
-  const cfg = {
-    workerUrl: document.getElementById("workerUrl").value.trim(),
-    defIn: document.getElementById("defIn").value,
-    defOut: document.getElementById("defOut").value,
-    silenceMs: document.getElementById("silenceMs").value,
-    maxChars: document.getElementById("maxChars").value,
-    maxAgeMs: document.getElementById("maxAgeMs").value,
-    autoSpeak: document.getElementById("autoSpeak").value,
-  };
-  if (!cfg.workerUrl) {
-    alert("Paste your Worker /translate URL first.");
-    return;
-  }
-  document.getElementById("out").value = template(cfg);
-};
-
-document.getElementById("copy").onclick = async () => {
-  const t = document.getElementById("out").value;
-  if (!t.trim()) return;
-  try { await navigator.clipboard.writeText(t); } catch {}
-};
 </script>
 </body>
 </html>
